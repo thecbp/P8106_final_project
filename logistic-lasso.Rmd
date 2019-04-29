@@ -58,15 +58,15 @@ pca.modelFit = train(genotype ~ ., data = pca.train,
                      trControl = trainControl,
                      family = "binomial",
                      tuneGrid = expand.grid(.alpha = 1, .lambda = exp(seq(-8, -2, length.out = 100))))
+
+preds = predict(modelFit, newdata = test)
+pca.preds =  predict(pca.modelFit, newdata = pca.test)
+
+err.rate = 1 - sum(preds == test$genotype)/length(test$genotype)
+pca.err.rate = 1 - sum(pca.preds == test$genotype)/length(test$genotype)
 ```
 
 ```{r}
 plot(modelFit)
+plot(pca.modelFit)
 ```
-
-
-```{r}
-preds = predict(modelFit$finalModel, newx = test.data[,-ncol(test)])
-```
-
-
