@@ -9,6 +9,7 @@ output: html_document
 set.seed(8106)
 library(tidyverse)
 library(visdat)
+library(caret)
 mice = read_csv('./data.csv') %>% 
   mutate(MouseID = 1:length(MouseID))
 
@@ -36,7 +37,7 @@ reduced.pca.mice = as_tibble(cbind(pca$x[,1:27], genotype = final.mice$genotype)
     genotype = as.factor(genotype)
     )
 
-train.idx = sample(1:nrow(final.mice), size = floor(0.8 * nrow(final.mice)))
+train.idx = createDataPartition(final.mice$genotype, p = 0.80, list = FALSE, times = 1)
 train = final.mice[train.idx,]
 test = final.mice[-train.idx,]
 pca.train = reduced.pca.mice[train.idx,]
@@ -44,8 +45,6 @@ pca.test = reduced.pca.mice[-train.idx,]
 ```
 
 ```{r}
-library(caret)
-
 trainControl = trainControl(method = "cv", number = 10, classProbs = TRUE)
 
 modelFit = train(genotype ~ ., data = train, 
@@ -61,6 +60,13 @@ pca.modelFit = train(genotype ~ ., data = pca.train,
                      tuneGrid = expand.grid(.alpha = 1, .lambda = exp(seq(-8, -2, length.out = 100))))
 ```
 
+```{r}
+plot(modelFit)
+```
 
+
+```{r}
+preds = predict(modelFit$finalModel, newx = test.data[,-ncol(test)])
+```
 
 
