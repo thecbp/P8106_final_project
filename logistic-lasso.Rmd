@@ -1,0 +1,64 @@
+---
+title: "Logistic-LASSO"
+author: "Christian Pascual"
+date: "4/29/2019"
+output: html_document
+---
+
+```{r}
+set.seed(8106)
+library(tidyverse)
+library(visdat)
+mice = read_csv('./data.csv') %>% 
+  mutate(MouseID = 1:length(MouseID))
+
+final.mice = mice %>% 
+  filter(!(MouseID %in% c(988, 989, 990))) %>% 
+  select_if(function(col) !any(is.na(col))) %>% 
+  select(DYRK1A_N:Genotype) %>% 
+  mutate(Genotype = as.factor(Genotype))
+
+proteins = final.mice %>% 
+  select(DYRK1A_N:CaNA_N) %>% 
+  map_df(.x = ., function(col) (col - mean(col))/sd(col))
+
+final.mice = cbind(proteins, Genotype = final.mice$Genotype)
+
+proteins = final.mice %>% select(-Genotype)
+pca = prcomp(proteins)
+reduced.pca.mice = as_tibble(cbind(pca$x[,1:27], Genotype = final.mice$Genotype))
+```
+
+```{r}
+library(glmnet)
+x = final.mice %>% select(DYRK1A_N:CaNA_N) %>% as.matrix(.)
+y = final.mice$Genotype %>% as.factor(.)
+
+pca.x = reduced.pca.mice %>% select(PC1:PC27) %>% as.matrix(.)
+pca.y = reduced.pca.mice$Genotype
+
+cv = cv.glmnet(x, y, alpha = 1, family = "binomial")
+pca.cv = cv.glmnet(pca.x, pca.y, alpha = 1, family = "binomial")
+plot(cv)
+plot(pca.cv)
+```
+
+```{r}
+library(caret)
+
+trainControl = trainControl(method = "cv", number = 10, classProbs = TRUE)
+
+modelFit = train(Genotype ~ ., data = final.mice, 
+                 method = "glmnet", 
+                 trControl = trainControl,
+                 family = "binomial",
+                 tuneGrid = expand.grid(.alpha = 1, .lambda = exp(seq(-8, -2, length.out = 100))))
+
+pca.modelFit = train(Genotype ~ ., data = reduced.pca.mice, method = "glmnet", 
+                     trControl = trainControl,
+                     tuneGrid = expand.grid(.alpha = 1, .lambda = exp(seq(-8, -2, length.out = 100))),
+                     alpha = 1, family = "binomial")
+
+```
+
+

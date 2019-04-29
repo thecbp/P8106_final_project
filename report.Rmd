@@ -14,6 +14,7 @@ This disparity offers an interesting classification problem: given expression da
 ## Data Cleaning
 
 ```{r, warning = FALSE, message = FALSE }
+set.seed(8106)
 library(tidyverse)
 library(visdat)
 mice = read_csv('./data.csv') %>% 
@@ -22,7 +23,7 @@ mice = read_csv('./data.csv') %>%
 
 A quick check of the data reveals that it contains missing values. Below we'll visualize how the missing data is distributed.
 
-```{r, fig.width = 5, fig.height = 3.3, dpi = 300, fig.align = 'center'}
+```{r, fig.width = 5, fig.height = 3.3, fig.align = 'center'}
 vis_miss(mice) + theme(axis.text = element_text(size = 3))
 ```
 
@@ -34,9 +35,124 @@ final.mice = mice %>%
   select_if(function(col) !any(is.na(col))) %>% 
   select(DYRK1A_N:Genotype) %>% 
   mutate(Genotype = ifelse(Genotype == "Control", 0, 1))
+
+proteins = final.mice %>% 
+  select(DYRK1A_N:CaNA_N) %>% 
+  map_df(.x = ., function(col) (col - mean(col))/sd(col))
+
+final.mice = cbind(proteins, Genotype = final.mice$Genotype)
 ```
 
-The resulting data set contains 68 proteins with complete information on 1077 mice. Each of the candidate proteins are on a similar magnitude, so we opted to not center and scale the data. Trisomic status was relabeled numerically to `0|1`.
+The resulting data set contains 68 proteins with complete information on 1077 mice. Each of the candidate proteins were also centered and scaled. Trisomic status was relabeled numerically to `0|1`.
+
+# Exploratory Data Analysis
+
+A major challenge of this data set is its high dimensionality. It's highly likely that only a small subset of the proteins are significant in predicting Down syndrome status. Before we attempt to make predictions on our data, we'll explore and visualize it to inform any modeling we may want to do.
+
+## Looking for candidate proteins
+
+The immediate first thing to check is if there are any proteins that help distinguish between cases and controls. Figure 1 lays out these differences.
+
+```{r, eval = FALSE, echo = FALSE }
+hist.data = final.mice %>% 
+  gather(., key = "protein", value = "level", DYRK1A_N:CaNA_N) %>% 
+  mutate(Genotype = ifelse(Genotype == 0, "Control", "DS"))
+  
+ggplot(data = hist.data, aes(x  = protein, y = level, color = Genotype)) +
+  geom_boxplot() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  labs(
+    title = "Histograms of protein levels by case vs control",
+    x = "Protein",
+    y = "Expression Level"
+  )
+```
+
+![Distribution of protein expression levels by Down syndrome status](./boxplots.png)
+
+The major takeaway from Figure 1 is that any differences that exist between the expression levels for each protein are small. There are notably more outliers for control mice for some proteins. No single protein seems to definitively classify cases against controls, so it might be helpful to at least see where the biggest differences are. 
+
+```{r, eval = FALSE }
+hist.data2 = final.mice %>% 
+  gather(., key = "protein", value = "level", DYRK1A_N:CaNA_N) %>% 
+  mutate(Genotype = ifelse(Genotype == 0, "Control", "DS")) %>% 
+  group_by(protein, Genotype) %>% 
+  summarise(mean = mean(level)) %>% 
+  spread(., key = Genotype, value = mean) %>% 
+  mutate(mean_diff  = abs(DS - Control)) %>% 
+  arrange(-mean_diff)
+  
+ggplot(data = subset(hist.data2, mean_diff > 0.25), 
+       aes(x  = reorder(protein, -mean_diff), y = mean_diff)) +
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  labs(
+    title = "Absolute difference of protein levels by case vs control",
+    x = "Protein",
+    y = "Expression Level"
+  )
+```
+
+![Proteins with at least a difference of 0.25 in their mean protein expression levels by case and control](./top-proteins.png)
+
+Out of the 68 remaining proteins, only 23 have more than a difference of 0.25 between the group means for expression levels. Only 9 have a difference greater than 0.4. This finding supports our suspicion that only a small subset of the proteins offer good discriminatory power.
+
+## Examining inter-protein correlation
+
+Biologically, protein expression is done in cascades. Thus, we would expect groups of proteins to be highly correlated with each other, representing the interplay of up and down-regulation. If this is the case, we would be able to further pare down our candidate variables for use in modeling. Figure 3 contains the correlation plot for all the proteins in the data set. 
+
+```{r, eval = FALSE }
+library(corrplot)
+proteins = final.mice %>% select(-Genotype)
+corrplot(cor(proteins), method = "color", tl.cex = 0.5)
+```
+
+![Correlation matrix for all 68 proteins in data set](./corrplot.png)
+
+Figure 3 confirms that there is a high degree of positive correlation within the data set. These proteins are likely to be within the same pathway, and thus having them in the same model won't help with classification. For our models, we need to use a form of dimension reduction.
+
+## Principal Component Analysis
+
+Following the findings from the correlation plot, we decided to see if principal component analysis would allow us to reduce the dimensionality of our data set for supervised learning. 
+
+```{r, eval = FALSE }
+# Perform the PCA
+pca = prcomp(proteins)
+
+# Plot out the variance explained by each PC
+tib = tibble(
+  PC = 1:ncol(pca$rotation),
+  var = pca$sdev^2 / sum(pca$sdev^2),
+  cumvar = cumsum(var)
+)
+
+ggplot(data = tib, aes(x = PC, y = cumvar)) + 
+  geom_line() + 
+  geom_point() +
+  geom_hline(yintercept = 0.8, color = "blue") + 
+  geom_hline(yintercept = 0.9, color = "green") + 
+  geom_hline(yintercept = 0.95, color = "red") + 
+  labs(
+    title = "Percentage of variance explained by principle components",
+    x = "Principal Component",
+    y = "% Variance Explained (cumulative)"
+  ) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+![Percentage of variance explained by principal components](./scree.png)
+
+Figure 4 illustrates that a high degree of variance can be explained by just a few principal components. The blue, green and red lines represent the threshold for 80%, 90% and 95% of the variance, respectively. 9 components explain at least 80% of the variance, 18 components explain 90% of the variance, and 27 components explain 95%. For our problem, we want to emphasize greater predictive ability, we'll opt to use the first 27 principal components. 
+
+```{r}
+reduced.pca.mice = as_tibble(pca$x[,1:27])
+```
+
+
 
 # References
 
