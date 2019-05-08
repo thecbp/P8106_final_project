@@ -146,11 +146,10 @@ ggplot(data = tib, aes(x = PC, y = cumvar)) +
 
 ![Percentage of variance explained by principal components](./scree.png)
 
-Figure 4 illustrates that a high degree of variance can be explained by just a few principal components. The blue, green and red lines represent the threshold for 80%, 90% and 95% of the variance, respectively. 9 components explain at least 80% of the variance, 18 components explain 90% of the variance, and 27 components explain 95%. For our problem, we want to emphasize greater predictive ability, we'll opt to use the first 27 principal components. 
+Figure 4 illustrates that a high degree of variance can be explained by just a few principal components. The blue, green and red lines represent the threshold for 80%, 90% and 95% of the variance, respectively. 9 components explain at least 80% of the variance, 18 components explain 90% of the variance, and 27 components explain 95%. For our problem, we want to emphasize greater predictive ability, we'll use the first 27 principal components. For the entire report, we'll also compare the predictive ability of our models using both the full data set and the reduced PCA version.
 
-```{r}
-reduced.pca.mice = as_tibble(pca$x[,1:27])
-```
+
+
 
 
 

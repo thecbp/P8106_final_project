@@ -70,3 +70,20 @@ pca.err.rate = 1 - sum(pca.preds == test$genotype)/length(test$genotype)
 plot(modelFit)
 plot(pca.modelFit)
 ```
+
+
+
+- Logistic-LASSO (Assigned to Christian)
+- KNN (Assigned to Justin)
+- Random Forest/Bagging (Assigned to Rebekah)
+- Boosting (AdaBoost?) (Assigned to Justin)
+- SVM (Assigned to Rebekah)
+
+
+- What techniques did you use
+- why did you choose it? 
+- What assumptions, if any, are being made by using this technique?
+- If there were tuning parameters, how did you pick their values?
+- What are the limitations of the models you used (if there are any)?
+
+We chose the logistic-LASSO due to the high dimensionality of the data and the nature of our problem. We have a suspicion that only a few proteins are truly related to Down Syndrome, so the variable selection quality of LASSO will help us hone in on these proteins. This suspicion consequently assumes that most of the proteins will truly equal zero, which we felt to be a reasonable assumption. Another assumption in using the logistic-LASSO is that the odds of having Down Syndrome is a linear function of the protein expression levels. We picked an optimal tuning parameter using 10-fold cross-validation on a training data set. If the true relationship between the syndrome and the proteins is non-linear, we suspect that this model will not perform as well.
