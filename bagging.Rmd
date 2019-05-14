@@ -1,0 +1,102 @@
+---
+title: "Bagging"
+author: "Dayoung Yu"
+date: "5/14/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### load data
+```{r}
+set.seed(8106)
+library(tidyverse)
+library(visdat)
+library(caret)
+library(randomForest)
+
+mice = read_csv('./data.csv') %>% 
+  mutate(MouseID = 1:length(MouseID))
+
+final.mice = mice %>% 
+  filter(!(MouseID %in% c(988, 989, 990))) %>% 
+  select_if(function(col) !any(is.na(col))) %>% 
+  select(DYRK1A_N:Genotype) %>% 
+  mutate(
+    genotype = ifelse(Genotype == "Control", "Control", "DS"),
+    genotype = as.factor(genotype)
+    ) %>% 
+  select(-Genotype)
+
+proteins = final.mice %>% 
+  select(DYRK1A_N:CaNA_N) %>% 
+  map_df(.x = ., function(col) (col - mean(col))/sd(col))
+
+final.mice = cbind(proteins, genotype = final.mice$genotype)
+
+proteins = final.mice %>% select(-genotype)
+pca = prcomp(proteins)
+reduced.pca.mice = as_tibble(cbind(pca$x[,1:27], genotype = final.mice$genotype)) %>% 
+  mutate(
+    genotype = ifelse(genotype == 1, "Control", "DS"),
+    genotype = as.factor(genotype)
+    )
+
+train.idx = createDataPartition(final.mice$genotype, p = 0.80, list = FALSE, times = 1)
+train = final.mice[train.idx,]
+test = final.mice[-train.idx,]
+pca.train = reduced.pca.mice[train.idx,]
+pca.test = reduced.pca.mice[-train.idx,]
+```
+
+
+```{r}
+trainControl = trainControl(method = "repeatedcv",
+                            summaryFunction = twoClassSummary,
+                            classProbs = TRUE,
+                            verboseIter = TRUE)
+
+grid = expand.grid(mfinal = (1:40), maxdepth = c(1,3,6,10,20))
+
+bagging.fit = train(genotype ~ ., data = train, 
+                   method = "AdaBag",
+                   trControl = trainControl,
+                   tuneGrid = grid,
+                   metric = "ROC")
+
+plot(bagging.fit)
+
+
+pca.bagging.fit = train(genotype ~ ., data = pca.train, 
+                   method = "AdaBag",
+                   trControl = trainControl,
+                   tuneGrid = grid)
+
+
+bagging.pred = predict(bagging.fit, newdata = test)
+pca.bagging.pred = predict(pca.bagging.fit, newdata = pca.test)
+
+
+err.rate = 1 - sum(bagging.pred == test$genotype)/length(test$genotype) #0.05116
+pca.err.rate = 1 - sum(pca.bagging.pred == pca.test$genotype)/length(pca.test$genotype) #0.06047
+
+```
+
+### cross validation error
+```{r}
+mean(bagging.fit$results$ROCSD / sqrt(bagging.fit$control$number)) #0.006020
+
+# pca
+mean(pca.bagging.fit$results$AccuracySD / sqrt(pca.bagging.fit$control$number)) #0.012815
+
+```
+
+
+### variable importance
+```{r}
+varImp(bagging.fit)
+
+```
+

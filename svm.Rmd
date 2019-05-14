@@ -1,0 +1,134 @@
+---
+title: "SVM"
+author: "Dayoung Yu"
+date: "5/14/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### load data
+```{r}
+set.seed(8106)
+library(tidyverse)
+library(visdat)
+library(caret)
+library(randomForest)
+library(kernlab)
+
+mice = read_csv('./data.csv') %>% 
+  mutate(MouseID = 1:length(MouseID))
+
+final.mice = mice %>% 
+  filter(!(MouseID %in% c(988, 989, 990))) %>% 
+  select_if(function(col) !any(is.na(col))) %>% 
+  select(DYRK1A_N:Genotype) %>% 
+  mutate(
+    genotype = ifelse(Genotype == "Control", "Control", "DS"),
+    genotype = as.factor(genotype)
+    ) %>% 
+  select(-Genotype)
+
+proteins = final.mice %>% 
+  select(DYRK1A_N:CaNA_N) %>% 
+  map_df(.x = ., function(col) (col - mean(col))/sd(col))
+
+final.mice = cbind(proteins, genotype = final.mice$genotype)
+
+proteins = final.mice %>% select(-genotype)
+pca = prcomp(proteins)
+reduced.pca.mice = as_tibble(cbind(pca$x[,1:27], genotype = final.mice$genotype)) %>% 
+  mutate(
+    genotype = ifelse(genotype == 1, "Control", "DS"),
+    genotype = as.factor(genotype)
+    )
+
+train.idx = createDataPartition(final.mice$genotype, p = 0.80, list = FALSE, times = 1)
+train = final.mice[train.idx,]
+test = final.mice[-train.idx,]
+pca.train = reduced.pca.mice[train.idx,]
+pca.test = reduced.pca.mice[-train.idx,]
+```
+
+
+```{r}
+set.seed(8106)
+
+### radial kernel
+ctr1 = trainControl(method = "cv")
+
+svmr.grid = expand.grid(C = exp(seq(-4, 5, len=10)),
+                        sigma = exp(seq(-8, -3, len=5)))
+
+svmr.fit = train(genotype ~ ., data = train,
+                 method = "svmRadial",
+                 preProcess = c("center", "scale"),
+                 tuneGrid = svmr.grid,
+                 trControl = ctr1)
+
+ggplot(svmr.fit, highlight = TRUE)
+
+
+pca.svmr.fit = train(genotype ~ ., data = pca.train,
+                 method = "svmRadial",
+                 preProcess = c("center", "scale"),
+                 tuneGrid = svmr.grid,
+                 trControl = ctr1)
+
+
+
+svmr.pred = predict(svmr.fit, newdata = test)
+pca.svmr.pred = predict(pca.svmr.fit, newdata = pca.test)
+
+err.rate = 1 - sum(svmr.pred == test$genotype)/length(test$genotype) #0.004651
+pca.err.rate = 1 - sum(pca.svmr.pred == pca.test$genotype)/length(pca.test$genotype) #0.004651
+```
+
+
+
+
+### Classification Error
+```{r}
+mean(svmr.fit$results$AccuracySD / sqrt(svmr.fit$control$number)) #0.004839
+
+#pca
+mean(pca.svmr.fit$results$AccuracySD / sqrt(pca.svmr.fit$control$number)) #0.004145
+```
+
+### Variable Importance
+```{r}
+varImp(svmr.fit)
+varImp(pca.svmr.fit)
+```
+
+
+### other kernals
+```{r}
+
+### linear kernel
+svml.grid = data.frame(cost = exp(seq(-5, 1, len=20)))
+      
+svml.fit = train(genotype ~ ., data = train,
+                 method = "svmLinear2",
+                 preProcess = c("center", "scale"),
+                 tuneGrid = svml.grid,
+                 trControl = ctr1)
+
+ggplot(svml.fit, highlight = TRUE)
+
+### polynial kernel
+svmp.grid = expand.grid(degree = exp(seq(1,8, len=8)),
+                        scale = exp(c(0.001, 0.010, 0.1, 1, 10)),
+                        C = exp(seq(-4, 5, len=10)))
+
+svmp.fit = train(genotype ~ ., data = train,
+                 method = "svmPoly",
+                 preProcess = c("center", "scale"),
+                 tuneGrid = svmp.grid,
+                 trControl = ctr1)
+
+ggplot(svmp.fit, highlight = TRUE)
+```
+
