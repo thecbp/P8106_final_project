@@ -1,0 +1,166 @@
+---
+title: "data science 2 final"
+author: "Justin Hsie"
+date: "5/14/2019"
+output: html_document
+---
+
+```{r}
+set.seed(8106)
+library(tidyverse)
+library(visdat)
+library(caret)
+library(pROC)
+library(ranger)
+
+mice = read_csv('./data.csv') %>% 
+  mutate(MouseID = 1:length(MouseID))
+
+final.mice = mice %>% 
+  filter(!(MouseID %in% c(988, 989, 990))) %>% 
+  select_if(function(col) !any(is.na(col))) %>% 
+  select(DYRK1A_N:Genotype) %>% 
+  mutate(
+    genotype = ifelse(Genotype == "Control", "Control", "DS"),
+    genotype = as.factor(genotype)
+    ) %>% 
+  select(-Genotype)
+
+proteins = final.mice %>% 
+  select(DYRK1A_N:CaNA_N) %>% 
+  map_df(.x = ., function(col) (col - mean(col))/sd(col))
+
+final.mice = cbind(proteins, genotype = final.mice$genotype)
+
+proteins = final.mice %>% select(-genotype)
+pca = prcomp(proteins)
+reduced.pca.mice = as_tibble(cbind(pca$x[,1:27], genotype = final.mice$genotype)) %>% 
+  mutate(
+    genotype = ifelse(genotype == 1, "Control", "DS"),
+    genotype = as.factor(genotype)
+    )
+
+train.idx = createDataPartition(final.mice$genotype, p = 0.80, list = FALSE, times = 1)
+train = final.mice[train.idx,]
+test = final.mice[-train.idx,]
+pca.train = reduced.pca.mice[train.idx,]
+pca.test = reduced.pca.mice[-train.idx,]
+```
+
+### KNN
+
+```{r}
+trainControl = trainControl(method = "repeatedcv", classProbs = TRUE, verboseIter = TRUE)
+
+set.seed(8106)
+model.knn = train(genotype ~ ., data = train,
+                  method = "knn",
+                  tuneGrid = data.frame(k = seq(1, 50)),
+                  trControl = trainControl,
+                  preProcess = c("center", "scale"))
+ggplot(model.knn)
+
+knn.pred = predict(model.knn, newdata = test)
+
+confusionMatrix(knn.pred, test$genotype) # 99.07% accuracy
+
+#test error rate
+err.rate = 1 - sum(knn.pred == test$genotype)/length(test$genotype) #0.009302326
+
+
+#pca
+set.seed(8106)
+model.knn.pca = train(genotype ~ ., data = pca.train,
+                  method = "knn",
+                  tuneGrid = data.frame(k = seq(1, 100, by = 5)),
+                  trControl = trainControl)
+ggplot(model.knn.pca)
+
+knn.pred.pca = predict(model.knn.pca, newdata = pca.test)
+
+confusionMatrix(knn.pred.pca, test$genotype) #99.07% accuracy
+
+#pca test error rate 
+pca.err.rate = 1 - sum(knn.pred.pca == test$genotype)/length(test$genotype) #0.009302326
+```
+
+###Cross Validation Error
+
+```{r}
+mean(model.knn$results$AccuracySD / sqrt(model.knn$control$number)) #0.008864273
+
+#pca
+mean(model.knn.pca$results$AccuracySD / sqrt(model.knn.pca$control$number)) #0.01276323
+```
+
+###Variable Importance
+
+```{r}
+varImp(model.knn)
+#varImp(model.knn.pca) didn't work for knn pca for some reason...
+```
+
+
+### Boosting
+
+```{r}
+gbmB.grid = expand.grid(n.trees = c(2000, 3000, 4000),
+                        interaction.depth = 1:6,
+                        shrinkage = c(0.001, 0.003, 0.005),
+                        n.minobsinnode = 1)
+
+# Binomial loss function
+
+set.seed(8106)
+gbmB.fit = train(genotype ~ ., data = train, 
+                 tuneGrid = gbmB.grid,
+                 trControl = trainControl,
+                 method = "gbm",
+                 distribution = "bernoulli",
+                 verbose = FALSE)
+
+ggplot(gbmB.fit, highlight = TRUE)
+
+gbmB.pred = predict(gbmB.fit, newdata = test)
+
+#test error rate
+gdmB.err.rate = 1 - sum(gbmB.pred == test$genotype)/length(test$genotype) #0.009302326
+
+
+#pca
+set.seed(8106)
+gbmB.fit.pca = train(genotype ~ ., data = pca.train, 
+                 tuneGrid = gbmB.grid,
+                 trControl = trainControl,
+                 method = "gbm",
+                 distribution = "bernoulli",
+                 verbose = FALSE)
+
+ggplot(gbmB.fit.pca, highlight = TRUE)
+
+gbmB.pred.pca = predict(gbmB.fit.pca, newdata = pca.test)
+
+#pca test error rate
+gdmB.pca.err.rate = 1 - sum(gbmB.pred.pca == test$genotype)/length(test$genotype) #0.04186047
+
+
+```
+
+###Cross Validation Error
+
+```{r}
+mean(gbmB.fit$results$AccuracySD / sqrt(gbmB.fit$control$number)) #0.005370817
+mean(gbmB.fit.pca$results$AccuracySD / sqrt(gbmB.fit.pca$control$number)) #0.009174903
+
+```
+
+### Variable Importance
+
+```{r}
+summary(gbmB.fit)
+summary(gbmB.fit.pca)
+```
+
+
+
+
