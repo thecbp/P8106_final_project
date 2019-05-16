@@ -62,8 +62,8 @@ pca.modelFit = train(genotype ~ ., data = pca.train,
 preds = predict(modelFit, newdata = test)
 pca.preds =  predict(pca.modelFit, newdata = pca.test)
 
-err.rate = 1 - sum(preds == test$genotype)/length(test$genotype)
-pca.err.rate = 1 - sum(pca.preds == test$genotype)/length(test$genotype)
+ll.err.rate = 1 - sum(preds == test$genotype)/length(test$genotype)
+ll.pca.err.rate = 1 - sum(pca.preds == test$genotype)/length(test$genotype)
 ```
 
 ```{r}
@@ -71,6 +71,13 @@ plot(modelFit)
 plot(pca.modelFit)
 ```
 
+```{r}
+LOGLASSO.CV.ERR = mean((1 - modelFit$resample$Accuracy)) 
+LOGLASSO.TEST.ERR = ll.err.rate
+
+LOGLASSO.PCA.CV.ERR = mean((1 - pca.modelFit$resample$Accuracy)) 
+LOGLASSO.PCA.TEST.ERR = ll.pca.err.rate
+```
 
 
 - Logistic-LASSO (Assigned to Christian)

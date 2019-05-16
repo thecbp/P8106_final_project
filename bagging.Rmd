@@ -72,15 +72,16 @@ plot(bagging.fit)
 pca.bagging.fit = train(genotype ~ ., data = pca.train, 
                    method = "AdaBag",
                    trControl = trainControl,
-                   tuneGrid = grid)
+                   tuneGrid = grid,
+                   metric = "ROC")
 
 
 bagging.pred = predict(bagging.fit, newdata = test)
 pca.bagging.pred = predict(pca.bagging.fit, newdata = pca.test)
 
 
-err.rate = 1 - sum(bagging.pred == test$genotype)/length(test$genotype) #0.05116
-pca.err.rate = 1 - sum(pca.bagging.pred == pca.test$genotype)/length(pca.test$genotype) #0.06047
+bagging.err.rate = 1 - sum(bagging.pred == test$genotype)/length(test$genotype) #0.05116
+bagging.pca.err.rate = 1 - sum(pca.bagging.pred == pca.test$genotype)/length(pca.test$genotype) #0.06047
 
 ```
 
@@ -97,6 +98,13 @@ mean(pca.bagging.fit$results$AccuracySD / sqrt(pca.bagging.fit$control$number)) 
 ### variable importance
 ```{r}
 varImp(bagging.fit)
+```
 
+```{r}
+BAG.CV.ERR = mean(1 - bagging.fit$resample$Sens)
+BAG.TEST.ERR = bagging.err.rate
+  
+BAG.PCA.CV.ERR = mean(1 - pca.bagging.fit$resample$Sens)
+BAG.PCA.TEST.ERR = bagging.pca.err.rate
 ```
 

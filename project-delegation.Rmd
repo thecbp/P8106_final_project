@@ -41,7 +41,7 @@ Models
 
 - Logistic-LASSO (Assigned to Christian)
 - KNN (Assigned to Justin)
-- Random Forest/Bagging (Assigned to Rebekah)
+- Random Forest & Bagging (Assigned to Rebekah)
 - Boosting (AdaBoost?) (Assigned to Justin)
 - SVM (Assigned to Rebekah)
 

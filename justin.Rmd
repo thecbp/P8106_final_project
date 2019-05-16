@@ -65,7 +65,7 @@ knn.pred = predict(model.knn, newdata = test)
 confusionMatrix(knn.pred, test$genotype) # 99.07% accuracy
 
 #test error rate
-err.rate = 1 - sum(knn.pred == test$genotype)/length(test$genotype) #0.009302326
+knn.err.rate = 1 - sum(knn.pred == test$genotype)/length(test$genotype) #0.009302326
 
 
 #pca
@@ -81,7 +81,7 @@ knn.pred.pca = predict(model.knn.pca, newdata = pca.test)
 confusionMatrix(knn.pred.pca, test$genotype) #99.07% accuracy
 
 #pca test error rate 
-pca.err.rate = 1 - sum(knn.pred.pca == test$genotype)/length(test$genotype) #0.009302326
+knn.pca.err.rate = 1 - sum(knn.pred.pca == test$genotype)/length(test$genotype) #0.009302326
 ```
 
 ###Cross Validation Error
@@ -151,7 +151,6 @@ gdmB.pca.err.rate = 1 - sum(gbmB.pred.pca == test$genotype)/length(test$genotype
 ```{r}
 mean(gbmB.fit$results$AccuracySD / sqrt(gbmB.fit$control$number)) #0.005370817
 mean(gbmB.fit.pca$results$AccuracySD / sqrt(gbmB.fit.pca$control$number)) #0.009174903
-
 ```
 
 ### Variable Importance
@@ -162,5 +161,18 @@ summary(gbmB.fit.pca)
 ```
 
 
+```{r}
+KNN.CV.ERR = mean(1 - model.knn$resample$Accuracy)
+KNN.TEST.ERR = knn.err.rate
+
+KNN.PCA.CV.ERR = mean(1 - model.knn.pca$resample$Accuracy)
+KNN.PCA.TEST.ERR = knn.pca.err.rate
+
+BOOST.CV.ERR = mean(1 - gbmB.fit$resample$Accuracy)
+BOOST.TEST.ERR = gdmB.err.rate
+  
+BOOST.PCA.CV.ERR = mean(1 - gbmB.fit.pca$resample$Accuracy)
+BOOST.PCA.TEST.ERR = gdmB.pca.err.rate
+```
 
 

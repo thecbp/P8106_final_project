@@ -82,8 +82,8 @@ pca.svmr.fit = train(genotype ~ ., data = pca.train,
 svmr.pred = predict(svmr.fit, newdata = test)
 pca.svmr.pred = predict(pca.svmr.fit, newdata = pca.test)
 
-err.rate = 1 - sum(svmr.pred == test$genotype)/length(test$genotype) #0.004651
-pca.err.rate = 1 - sum(pca.svmr.pred == pca.test$genotype)/length(pca.test$genotype) #0.004651
+svm.err.rate = 1 - sum(svmr.pred == test$genotype)/length(test$genotype) #0.004651
+svm.pca.err.rate = 1 - sum(pca.svmr.pred == pca.test$genotype)/length(pca.test$genotype) #0.004651
 ```
 
 
@@ -129,6 +129,25 @@ svmp.fit = train(genotype ~ ., data = train,
                  tuneGrid = svmp.grid,
                  trControl = ctr1)
 
-ggplot(svmp.fit, highlight = TRUE)
+ggplot(svmr.fit, highlight = TRUE) +
+  labs(
+    title = "Results of cross-validation in "
+  )
+```
+
+```{r}
+SVM.CV.ERR = mean((1 - svmr.fit$resample$Accuracy))
+SVM.TEST.ERR = svm.err.rate
+
+SVM.PCA.CV.ERR = mean((1 - pca.svmr.fit$resample$Accuracy))
+SVM.PCA.TEST.ERR = svm.pca.err.rate
+```
+
+```{r}
+library(e1071)
+e1071.svm = svm(genotype ~., data = train, kernel = "radial", 
+             gamma = 0.0497870684)
+small.train = train %>% select(APP_N, S6_N, genotype)
+plot(e1071.svm, train, APP_N~S6_N)
 ```
 
